@@ -76,15 +76,6 @@ nzvTesting <- nearZeroVar(testingPreProcessed,saveMetrics=TRUE)
 testingPreProcessed <- testingPreProcessed[,nzvTesting$nzv==FALSE]
 ```
 
-Removing the variables with values near zero:
-```{r  , warning=FALSE, message = FALSE, echo=TRUE}
-nzvTraining <- nearZeroVar(trainPreProcessed,saveMetrics=TRUE)
-trainPreProcessed <- trainPreProcessed[,nzvTraining$nzv==FALSE]
-
-nzvTesting <- nearZeroVar(testingPreProcessed,saveMetrics=TRUE)
-testingPreProcessed <- testingPreProcessed[,nzvTesting$nzv==FALSE]
-```
-
 Training set has 28 variables from the initial 160. 
 
 ### Cross validation
