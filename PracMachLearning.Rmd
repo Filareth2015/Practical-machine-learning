@@ -6,7 +6,7 @@ output: html_document
 ---
 
 [Link to project on GitHUB](https://github.com/Filareth2015/Practical-machine-learning)     
-[Link to project on RPub]()
+[Link to project on RPub](http://rpubs.com/Zanin_Pavel/175522)
 
 ## Introduction     
 
@@ -51,7 +51,7 @@ indexForNA_testing <- apply(testing,2,function(x) {sum(is.na(x))})
 testing <- testing[,which(indexForNA_testing == 0)]
 ```
 
-Setting classes as factor:
+Setting classe as factor:
 ```{r  , warning=FALSE, message = FALSE, echo=TRUE}
 training$classe <- as.factor(training$classe)
 ```
@@ -128,5 +128,23 @@ modFit <- train(classe ~.,
 modFit
 ```
 
+Following the computation on the accuracy of trainig and cross validation set
 
+Training set:
+```{r  , warning=FALSE, message = FALSE, echo=TRUE, cache=TRUE}
+trainingPartPrediction <- predict(modFit, trainingPart)
+confusionMatrix(trainingPartPrediction, trainingPart$classe)
+```
 
+Cross validation set:
+```{r  , warning=FALSE, message = FALSE, echo=TRUE, cache=TRUE}
+testingPartPrediction <- predict(modFit, testingPart)
+confusionMatrix(testingPartPrediction, testingPart$classe)
+```
+
+### The end: predictions on the real testing set
+
+```{r  , warning=FALSE, message = FALSE, echo=TRUE, cache=TRUE}
+testingPrediction <- predict(modFit, testingPreProcessed)
+testingPrediction
+```
