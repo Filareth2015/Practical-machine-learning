@@ -1,0 +1,132 @@
+---
+title: "Practical machine learning - course work"
+author: "Zanin Pavel"
+date: "April 25, 2016"
+output: html_document
+---
+
+[Link to project on GitHUB](https://github.com/Filareth2015/Practical-machine-learning)     
+[Link to project on RPub]()
+
+## Introduction     
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website [here](http://groupware.les.inf.puc-rio.br/har) (see the section on the Weight Lifting Exercise Dataset).
+
+The goal of this project is to predict the manner of performing unilateral dumbbell biceps curls based on data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. The 5 possible methods include:     
+A: exactly according to the specification     
+B: throwing the elbows to the front     
+C: lifting the dumbbell only halfway    
+D: lowering the dumbbell only halfway    
+E: throwing the hips to the front     
+
+## Data processing     
+
+### Preprocessing 
+
+Loading necessary libraries and setting the seed:    
+```{r  , warning=FALSE, message = FALSE, echo=TRUE}
+library(caret)
+library(rpart)
+library(rattle)
+library(randomForest)
+
+set.seed(12345)
+```
+
+Downloading and reading training and testing datasets:    
+```{r  , warning=FALSE, message = FALSE, echo=TRUE, cache=TRUE}
+trainingURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+training <- read.csv(trainingURL, na.strings=c("NA",""), header=TRUE)
+testing <- read.csv(testURL, na.strings=c("NA",""), header=TRUE)
+```
+
+Deleting in datasets columns with only NA:
+```{r  , warning=FALSE, message = FALSE, echo=TRUE}
+indexForNA_training <- apply(training,2,function(x) {sum(is.na(x))}) 
+training <- training[,which(indexForNA_training == 0)]
+
+indexForNA_testing <- apply(testing,2,function(x) {sum(is.na(x))}) 
+testing <- testing[,which(indexForNA_testing == 0)]
+```
+
+Setting classes as factor:
+```{r  , warning=FALSE, message = FALSE, echo=TRUE}
+training$classe <- as.factor(training$classe)
+```
+
+Preprocessing colums with numeric data:
+```{r  , warning=FALSE, message = FALSE, echo=TRUE}
+numericCol <- which(lapply(training, class) %in% "numeric")
+
+preObj <-preProcess(training[,numericCol],method=c('knnImpute', 'center', 'scale'))
+trainPreProcessed <- predict(preObj, training[,numericCol])
+trainPreProcessed$classe <- training$classe
+
+testingPreProcessed <-predict(preObj,testing[,numericCol])
+```
+
+Removing the variables with values near zero:
+```{r  , warning=FALSE, message = FALSE, echo=TRUE}
+nzvTraining <- nearZeroVar(trainPreProcessed,saveMetrics=TRUE)
+trainPreProcessed <- trainPreProcessed[,nzvTraining$nzv==FALSE]
+
+nzvTesting <- nearZeroVar(testingPreProcessed,saveMetrics=TRUE)
+testingPreProcessed <- testingPreProcessed[,nzvTesting$nzv==FALSE]
+```
+
+Removing the variables with values near zero:
+```{r  , warning=FALSE, message = FALSE, echo=TRUE}
+nzvTraining <- nearZeroVar(trainPreProcessed,saveMetrics=TRUE)
+trainPreProcessed <- trainPreProcessed[,nzvTraining$nzv==FALSE]
+
+nzvTesting <- nearZeroVar(testingPreProcessed,saveMetrics=TRUE)
+testingPreProcessed <- testingPreProcessed[,nzvTesting$nzv==FALSE]
+```
+
+Training set has 28 variables from the initial 160. 
+
+### Cross validation
+
+Dividing the training set in two parts, one for training and the other for cross validation:
+```{r  , warning=FALSE, message = FALSE, echo=TRUE}
+inTrain = createDataPartition(trainPreProcessed$classe, p = 3/4, list=FALSE)
+trainingPart = trainPreProcessed[inTrain,]
+
+testingPart = trainPreProcessed[-inTrain,]
+```
+
+### Decision Tree Model
+
+Fitting a decision tree: 
+```{r  , warning=FALSE, message = FALSE, echo=TRUE, cache=TRUE}
+decisiontree <- train(classe~.,method="rpart", data=trainingPart)
+fancyRpartPlot(decisiontree$finalModel)
+```
+
+Predicting and using confusion matrix to test results: 
+```{r  , warning=FALSE, message = FALSE, echo=TRUE, cache=TRUE}
+predictions <- predict(decisiontree,newdata = testingPart)
+confusionMatrix(testingPart$classe, predictions)
+```
+
+The decision tree is a fairly poor fit having an accuracy rate of roughly 50%.
+
+### Random forest
+
+Train model with random forest due to its highly accuracy rate. Cross validation is used as train control method.
+
+```{r  , warning=FALSE, message = FALSE, echo=TRUE, cache=TRUE}
+modFit <- train(classe ~.,
+                method="rf", 
+                data=trainingPart, 
+                trControl=trainControl(method='cv'), 
+                number=5, 
+                allowParallel=TRUE )
+
+modFit
+```
+
+
+
