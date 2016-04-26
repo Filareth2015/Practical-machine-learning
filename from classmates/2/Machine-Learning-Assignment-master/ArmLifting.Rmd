@@ -1,0 +1,203 @@
+---
+output: html_document
+---
+#Arm Lifting Prediction Assignment
+##Practical Machine Learning Project
+Name: SHILPA SWETH  
+Date: 4/25/2016
+
+##1. Introduction
+
+###a. Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+###b. Data
+
+The training data for this project are available here: [https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv]
+The test data are available here: [https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv]
+The data for this project come from this source: [http://groupware.les.inf.puc-rio.br/har]. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+###c. What you should submit
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+Your submission should consist of a link to a Github repo with your R markdown and compiled HTML file describing your analysis. Please constrain the text of the writeup to < 2000 words and the number of figures to be less than 5. It will make it easier for the graders if you submit a repo with a gh-pages branch so the HTML page can be viewed online (and you always want to make it easy on graders :-).
+You should also apply your machine learning algorithm to the 20 test cases available in the test data above. Please submit your predictions in appropriate format to the programming assignment for automated grading. See the programming assignment for additional details.
+
+###d. Procedure
+
+Training and testing sets obtained from net.  
+Both sets are cleaned.  
+Training set further divided into pseudo training set and smaller training set.  
+Different models compared and best one selected.  
+Model verified on pdeudo training set.  
+Creation of testing set prediction output files for assignment submission.  
+
+##2. Obtainining the Dataset
+
+###a. Loading libraries
+
+The following packages have to be loaded.
+```{r,warning=FALSE, message=FALSE}
+library(abind)
+library(arm)
+library(caret)
+library(caTools)
+library(e1071)
+library(elasticnet)
+library(gbm)
+library(kernlab)
+library(klaR)
+library(plyr)
+library(randomForest)
+library(rattle)
+library(rpart)
+```
+
+###b. Reproducibility
+
+Set seed for pseudo-random generator. In order to reproduce the results below, the same seed should be used. 
+```{r,warning=FALSE}
+set.seed(7200)
+```
+
+###c. Loading dataset
+
+Training and Testing datasets loaded into trainUrl and testingUrl respectively.
+```{r,warning=FALSE}
+trainUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+trainingSet <- read.csv(url(trainUrl), na.strings=c("NA","#DIV/0!",""))
+
+testUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+testingSet <- read.csv(url(testUrl), na.strings=c("NA","#DIV/0!",""))
+```
+
+##3. Cleaning and Preprocessing
+
+###a. Removing near zero variance entries, mostly incomplete entries and uneeded columns
+
+The following lines code help to trim down the dataset.
+```{r,warning=FALSE}
+nearZero <- nearZeroVar(trainingSet, saveMetrics = TRUE)
+trainingSet <- trainingSet[, !nearZero$nzv]
+
+nearZero <- nearZeroVar(testingSet, saveMetrics = TRUE)
+testingSet <- testingSet[, !nearZero$nzv]
+
+
+trainingSet[trainingSet==""] <- NA
+rate <- apply(trainingSet, 2, function(x) sum(is.na(x)))/nrow(trainingSet)
+trainingSet <- trainingSet[!(rate>0.50)]
+
+testingSet[testingSet==""] <- NA
+rate <- apply(testingSet, 2, function(x) sum(is.na(x)))/nrow(testingSet)
+testingSet <- testingSet[!(rate>0.50)]
+
+
+trainingSet   <-trainingSet[,-c(1:7)]
+
+testingSet <-testingSet[,-c(1:7)]
+
+```
+
+##4. Model Testing and Cross Fitting
+
+###a. Data Splitting
+
+20% of the training set is taken as a pseudo testing set and the remaining is tested upon.
+```{r,warning=FALSE}
+temp <- createDataPartition(y=trainingSet$classe, p=0.80, list=FALSE)
+temp1 <- trainingSet[temp, ] 
+fakeTest <- trainingSet[-temp, ]
+trainingSet <- temp1
+```
+
+
+###b. Cross Validation and generation of different models 
+
+TrainControl used to perform 8-fold cross validation in order to avoid overfitting and to reduce out of sample errors.
+```{r,warning=FALSE}
+control <- trainControl(method = "cv", number = 8, verboseIter=FALSE , preProcOptions="pca", allowParallel=TRUE)
+
+randFor <- train(classe ~ ., data = trainingSet, method = "rf", trControl= control, verbose=FALSE)
+gradBoost <- train(classe ~ ., data = trainingSet, method = "gbm", trControl= control, verbose=FALSE)
+svmLin <- train(classe ~ ., data = trainingSet, method = "svmLinear", trControl= control, verbose=FALSE)
+svmRad <- train(classe ~ ., data = trainingSet, method = "svmRadial", trControl= control, verbose=FALSE)  
+bayesGLM <- train(classe ~ ., data = trainingSet, method = "bayesglm", trControl= control)
+lda <- train(classe ~ ., data = trainingSet, method = "lda", trControl= control)
+logitBoost <- train(classe ~ ., data = trainingSet, method = "LogitBoost", trControl= control, verbose=FALSE)
+```
+
+###c. Models obtained compared based on Accuracy and Kappa values
+
+```{r,warning=FALSE}
+Model <- c("Random Forest", "Gradient Boosting","SVM (linear)", "SVM (radial)", "Bayes GLM", "Lnear Discriminant", "LogitBoost")
+
+Accuracy <- c(max(randFor$results$Accuracy),
+        max(gradBoost$results$Accuracy),
+        max(svmLin$results$Accuracy),
+        max(svmRad$results$Accuracy),
+        max(bayesGLM$results$Accuracy),
+        max(lda$results$Accuracy),
+        max(logitBoost$results$Accuracy))
+        
+Kappa <- c(max(randFor$results$Kappa),
+        max(gradBoost$results$Kappa),
+        max(svmLin$results$Kappa),
+        max(svmRad$results$Kappa),
+        max(bayesGLM$results$Kappa),
+        max(lda$results$Kappa),
+        max(logitBoost$results$Kappa))  
+
+compare <- cbind(Model,Accuracy,Kappa)
+
+knitr::kable(compare)
+```
+
+Hence Random Forest, Gradient Boosting and svm (radian) are the models that give the best results for the training set. 
+
+###d. Verifying Random Forest model against next two best models
+
+The predictions of each entry in the pseudo testing set generated by the different models are checked for any disreprencies.
+```{r,warning=FALSE}
+randPred <- predict(randFor, fakeTest)
+gradPred <- predict(gradBoost, fakeTest)
+svmrPred <- predict(svmRad, fakeTest)
+
+testPred <- data.frame(cbind(randPred, gradPred, svmrPred))
+testPred$check <- with(testPred, randPred == gradPred || randPred == svmrPred)
+colnames(testPred) <- c("Random Forest","Gradient Boosting", "SVM (radial)", "Verified")
+
+summary(testPred)
+knitr::kable(testPred[1:20,])
+```
+  
+Hence we can see from the summarry and the table that the model holds true for the pseudo testing set.
+
+##5. Creating files for submission
+
+These files hold the prediction results of each entry in the testing set.
+```{r,warning=FALSE}
+randPred <- predict(randFor, testingSet)
+pml_write_files = function(x){
+        n = length(x)
+        for(i in 1:n){
+                filename = paste0("problem_id_",i,".txt")
+                write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+        }
+}
+
+pml_write_files(randPred)
+```
+
+##6. Conclusion
+
+Random forest model gave the best results and was verified with the Gradinet Boosting and SVM (radial) model.
+
+##7. References
+
+Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6. 
+Cited by 2 (Google Scholar)
+
+Read more: http://groupware.les.inf.puc-rio.br/har#ixzz46sWGP49E

@@ -1,0 +1,60 @@
+---
+title: "Prediction-Assignment-Writeup"
+author: "Shebloff"
+date: "26 april 2016"
+output: 
+  html_document: 
+    keep_md: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. The goal of your project is to predict the manner in which they did the exercise.
+
+## Cleaning and preparing Data
+First erasing empty and unrelevant columns
+```{r}
+library(caret)
+set.seed(321)
+
+train <- read.csv("pml-training.csv", stringsAsFactors=FALSE)
+train$classe <- as.factor(train$classe)
+train <- train[,-c(1:7)]
+train <- train[,-nearZeroVar(train)]
+```
+
+Using KNN method. PCA to reduce features.
+
+```{r}
+inTrain <- createDataPartition(y=train$classe, p=0.7, list=FALSE)
+train <- train[inTrain,]
+test <- train[-inTrain,]
+
+l<-length(train)
+preObj <- preProcess(train[,-l],method=c("center","scale","knnImpute","pca"), thresh=0.9)
+clean_data <- predict(preObj,train[,-l])
+```
+
+##Prediction
+The accuracy of KNN is 0.9643, which would give us an out of sample error of 1-0.9643= 0.0357
+```{r}
+modelFit <- train(train$classe ~.,data=clean_data, method="knn")
+testresult <- predict(preObj, test[,-length(test)])
+confusionMatrix(test$classe, predict(modelFit,testresult))
+```
+
+##And predictiong on testing data
+
+```{r}
+test <- read.csv("pml-testing.csv", stringsAsFactors=FALSE)
+test <- test[,names(test) %in% names(train)]
+
+testresult <- predict(preObj, test)
+predict_result <- predict(modelFit, testresult)
+predict_result
+```
+

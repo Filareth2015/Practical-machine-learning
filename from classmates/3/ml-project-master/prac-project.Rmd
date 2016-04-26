@@ -1,0 +1,173 @@
+---
+title: "Practical Machine Learning Project"
+author: "Snehal Samant"
+date: "April 21, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+This project attempts to build a predictive model based on data collected on people performing exercises to predict if they performed the exercise correctly.
+
+The training and testing dataset have been provided -  http://groupware.les.inf.puc-rio.br/har
+
+## Feature extraction and selection
+
+Let's load the necessary libraries and the datasets.
+
+```{r, message=FALSE}
+
+library(caret)
+
+training <- read.csv("pml-training.csv", na.strings = c("","NA","#DIV/0!"))
+testing <- read.csv("pml-testing.csv", na.strings = c("","NA","#DIV/0!"))
+
+```
+
+The first 7 columns are descriptive and won't be required. Let's drop these.
+
+```{r}
+
+training <- training[,-c(1:7)]
+
+```
+Variables with near zero variance will not be useful so these need to be identified and dropped.
+
+```{r}
+
+# Find columns with near zero variance and drop them
+zero_var_cols <- nearZeroVar(training)
+training <- training[,-zero_var_cols]
+
+```
+We are left with some variables which have a high very high proportion of NAs. These also need to be excluded.
+
+```{r}
+
+# Save the number of NAs in each column and then drop columns with more than 0 NAs. All the columns have super high NAs.
+na_count <- as.data.frame(sapply(training, function(y) sum(length(which(is.na(y))))))
+na_count <- subset(na_count, na_count[,1]<1)
+training <- training[,rownames(na_count)]
+
+```
+
+We should now check for variables which have a high pair-wise correlation and remove one of them.
+
+```{r}
+
+# Create a correlation matrix, find columns with more than 0.75 correlation and drop them
+cor_matrix <- cor(training[,-53])
+high_cor_vars <- findCorrelation(cor_matrix, cutoff=0.75)
+training <- training[,-high_cor_vars]
+
+```
+
+## Data partitioning
+
+We will split the training data into 3 parts (in the ratio of 60:20:20): train_all to train all models, train_test to test each model and compare accuracy. The final train_cv will be used to test the final model's accuracy to estimate out-of-sample error.
+
+
+```{r}
+
+# Create training set
+inTrain <- createDataPartition(y=training$classe, p=0.6, list=FALSE)
+train_all <- training[inTrain,]
+dum_data <- training[-inTrain,]
+
+# Create testing and validation set
+inCV <- createDataPartition(y=dum_data$classe, p=0.5, list=FALSE)
+train_test <- dum_data[-inCV,]
+train_cv <- dum_data[inCV,]
+
+```
+
+## Model building and selection
+
+We will train 3 models using Random Forest, Gradient Boosting Machine and Naive Bayes algorithms and comapre their accuracy. Each model will use 10 fold cross-validation.
+
+```{r, warning=FALSE, message=FALSE}
+
+#Initialise parallel processing
+library(doParallel)
+registerDoParallel(cores=3)
+
+#define 10 folds for train control
+train_control <- trainControl(method="cv", number=10)
+
+#build random forest model
+modrf <- train(classe~., method="rf", data=train_all, trControl = train_control)
+modrf_res <- predict(modrf, train_test)
+
+#save accuracy
+mod_acc <- data.frame("RandomForest" = confusionMatrix(modrf_res, train_test$classe)$overall['Accuracy'])
+
+#build GBM model
+modgbm <- train(classe~., method="gbm", data=train_all, trControl = train_control, verbose=FALSE)
+modgbm_res <- predict(modgbm, train_test)
+
+mod_acc$GBM <- confusionMatrix(modgbm_res, train_test$classe)$overall['Accuracy']
+
+#build Naive bayes model
+modnb <- train(classe~., method="nb", trControl = train_control, data=train_all)
+modnb_res <- predict(modnb, train_test)
+
+mod_acc$NaiveBayes <- confusionMatrix(modnb_res, train_test$classe)$overall['Accuracy']
+
+```
+
+##Model Selection
+
+Let's check the accuracy of all three models.
+
+```{r}
+
+mod_acc
+
+```
+Random Forest seems to have the best accuracy and is selected as the final model.
+
+## Estimating out of sample error
+
+Using the final model we predict on the train_cv dataset once to estimate the out of sample error.
+
+```{r}
+
+# Predict on the validation set and calculate out of sample error
+modrf_cv <- predict(modrf, train_cv)
+cv_oos <- 1-confusionMatrix(modrf_cv, train_cv$classe)$overall['Accuracy']
+
+```
+
+The out of sample error estimate is `r cv_oos`.
+
+## Predicting testing set
+
+Let's predict on the testing dataset.
+
+```{r}
+
+predict(modrf, testing)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
